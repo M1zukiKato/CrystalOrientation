@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>結晶方位可視化アプリケーション</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-top: 0;
+        }
+        
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+        
+        .mode-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        
+        button:hover {
+            opacity: 0.9;
+        }
+        
+        .btn-plane {
+            background-color: #3498db;
+            color: white;
+        }
+        
+        .btn-direction {
+            background-color: #2ecc71;
+            color: white;
+        }
+        
+        .btn-rolling {
+            background-color: #e74c3c;
+            color: white;
+        }
+        
+        .btn-inactive {
+            background-color: #ecf0f1;
+            color: #7f8c8d;
+        }
+        
+        .indices-input {
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        
+        .indices-input label {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        
+        .indices-group {
+            display: flex;
+            gap: 5px;
+        }
+        
+        input[type="number"] {
+            width: 60px;
+            padding: 6px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            text-align: center;
+        }
+        
+        .canvas-container {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        
+        canvas {
+            border: 1px solid #ddd;
+            background-color: white;
+            border-radius: 4px;
+            box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.1);
+        }
+        
+        .legend {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            border-radius: 3px;
+        }
+        
+        .plane-color {
+            background-color: rgba(0, 128, 255, 0.3);
+            border: 2px solid rgb(0, 100, 200);
+        }
+        
+        .direction-color {
+            background-color: #000;
+        }
+        
+        .rolling-color {
+            background-color: rgb(200, 50, 50);
+        }
+        
+        .disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ミラー指数表示器</h1>
+        
+        <div class="mode-buttons">
+            <button id="btn-plane" class="btn-plane">結晶面</button>
+            <button id="btn-direction" class="btn-inactive">結晶方向 <uvw></button>
+            <button id="btn-rolling" class="btn-inactive">面、方向<uvw></button>
+            <button id="btn-reset" class="btn-inactive">回転リセット</button>
+        </div>
+        
+        <div class="controls">
+            <div class="indices-input" id="plane-indices">
+                <label>結晶面</label>
+                <div class="indices-group">
+                    <input type="number" id="h" value="1" min="-9" max="9">
+                    <input type="number" id="k" value="1" min="-9" max="9">
+                    <input type="number" id="l" value="0" min="-9" max="9">
+                </div>
+            </div>
+            
+            <div class="indices-input disabled" id="direction-indices">
+                <label>結晶方向<uvw></label>
+                <div class="indices-group">
+                    <input type="number" id="u" value="1" min="-9" max="9" disabled>
+                    <input type="number" id="v" value="0" min="-9" max="9" disabled>
+                    <input type="number" id="w" value="0" min="-9" max="9" disabled>
+                </div>
+            </div>
+        </div>
+        
+        <div class="canvas-container">
+            <canvas id="crystal-canvas" width="400" height="400"></canvas>
+        </div>
+        
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color plane-color"></div>
+                <span>結晶面</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color direction-color"></div>
+                <span>結晶方向<uvw></span>
+            </div>
+            <div class="legend-item" id="rolling-legend" style="display: none;">
+                <div class="legend-color rolling-color"></div>
+                <span>面、方向</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // モード管理
+        let orientationType = 'plane'; // 'plane', 'direction'
+        let showRollingDirection = false;
+        
+        // ミラー指数
+        let planeIndices = { h: 1, k: 1, l: 0 };
+        let directionIndices = { u: 1, v: 0, w: 0 };
+        
+        // キャンバス設定
+        const canvasSize = 400;
+        const centerPoint = canvasSize / 2;
+        let scale = 80; // スケールを調整して、立方体全体が表示されるようにする
+        let rotationX = 0;
+        let rotationY = 0;
+        
+        // DOM要素の取得
+        const canvas = document.getElementById('crystal-canvas');
+        const context = canvas.getContext('2d');
+        
+        const btnPlane = document.getElementById('btn-plane');
+        const btnDirection = document.getElementById('btn-direction');
+        const btnRolling = document.getElementById('btn-rolling');
+        
+        const planeIndicesDiv = document.getElementById('plane-indices');
+        const directionIndicesDiv = document.getElementById('direction-indices');
+        
+        const hInput = document.getElementById('h');
+        const kInput = document.getElementById('k');
+        const lInput = document.getElementById('l');
+        const uInput = document.getElementById('u');
+        const vInput = document.getElementById('v');
+        const wInput = document.getElementById('w');
+        
+        const rollingLegend = document.getElementById('rolling-legend');
+        
+        // 結晶面・方向・圧延方向のモード切替
+        btnPlane.addEventListener('click', () => {
+            orientationType = 'plane';
+            showRollingDirection = false;
+            updateUIState();
+            drawCrystal();
+        });
+        
+        btnDirection.addEventListener('click', () => {
+            orientationType = 'direction';
+            showRollingDirection = false;
+            updateUIState();
+            drawCrystal();
+        });
+        
+        btnRolling.addEventListener('click', () => {
+            showRollingDirection = !showRollingDirection;
+	    orientationType = 'both';
+            updateUIState();
+            drawCrystal();
+        });
+        
+        // 入力値の変更イベント処理
+        [hInput, kInput, lInput].forEach(input => {
+            input.addEventListener('change', () => {
+                planeIndices.h = parseInt(hInput.value) || 0;
+                planeIndices.k = parseInt(kInput.value) || 0;
+                planeIndices.l = parseInt(lInput.value) || 0;
+                drawCrystal();
+            });
+        });
+        
+        [uInput, vInput, wInput].forEach(input => {
+            input.addEventListener('change', () => {
+                directionIndices.u = parseInt(uInput.value) || 0;
+                directionIndices.v = parseInt(vInput.value) || 0;
+                directionIndices.w = parseInt(wInput.value) || 0;
+                drawCrystal();
+            });
+        });
+        
+        // UIの状態を更新する関数
+        function updateUIState() {
+            // ボタンのスタイル更新
+            btnPlane.className = orientationType === 'plane' ? 'btn-plane' : 'btn-inactive';
+            btnDirection.className = orientationType === 'direction' ? 'btn-direction' : 'btn-inactive';
+            btnRolling.className = showRollingDirection ? 'btn-rolling' : 'btn-inactive';
+            
+            // 入力フィールドの有効/無効
+            if (orientationType === 'plane' && !showRollingDirection) {
+                planeIndicesDiv.classList.remove('disabled');
+                directionIndicesDiv.classList.add('disabled');
+                [uInput, vInput, wInput].forEach(input => input.disabled = true);
+                [hInput, kInput, lInput].forEach(input => input.disabled = false);
+            } else if (orientationType === 'direction' && !showRollingDirection) {
+                planeIndicesDiv.classList.add('disabled');
+                directionIndicesDiv.classList.remove('disabled');
+                [uInput, vInput, wInput].forEach(input => input.disabled = false);
+                [hInput, kInput, lInput].forEach(input => input.disabled = true);
+            } else {
+                // 圧延方向の場合は両方有効
+                planeIndicesDiv.classList.remove('disabled');
+                directionIndicesDiv.classList.remove('disabled');
+                [uInput, vInput, wInput, hInput, kInput, lInput].forEach(input => input.disabled = false);
+            }
+            
+            // 圧延方向の凡例表示/非表示
+                       //rollingLegend.style.display = showRollingDirection ? 'flex' : 'none';
+                   }
+                   
+                   // 立方晶の頂点を生成する関数
+        function generateCubicPoints() {
+            const size = 1;
+            return [
+                // 立方体の頂点 (原点を中心として配置)
+                [-size, -size, -size], [size, -size, -size], [size, size, -size], [-size, size, -size],
+                [-size, -size, size], [size, -size, size], [size, size, size], [-size, size, size]
+            ];
+        }
+        
+        // 立方晶のエッジを定義
+        const edges = [
+            [0, 1], [1, 2], [2, 3], [3, 0], // 底面
+            [4, 5], [5, 6], [6, 7], [7, 4], // 上面
+            [0, 4], [1, 5], [2, 6], [3, 7]  // 接続するエッジ
+        ];
+        
+        // 原点を中心とする立方体を描画するために座標を変換
+        function transformToCenterOrigin(point) {
+            // 原点(0,0,0)を中心に配置するため、座標の範囲を[-1,1]から[0,2]に変換
+            return [point[0] + 1, point[1] + 1, point[2] + 1];
+        }
+        
+        // 3D点を2Dに投影する関数
+              function project(point) {
+                          // 斜めから俯瞰した視点
+                          const originX = centerPoint - 20;
+                          const originY = centerPoint - 100;
+                          const x = originX + scale * (point[0] - point[1] * 0.5);
+                          const y = originY + scale * (point[2] + point[1] * 0.3);
+                          return [x, y];
+                      }
+              
+              // ミラー指数から平面上の点を計算する関数
+        function calculatePlanePoints(h, k, l) {
+            // h, k, l がすべて0の場合は空の配列を返す
+            if (h === 0 && k === 0 && l === 0) return [];
+            
+            const planeVertices = [];
+            
+            // ミラー指数に基づいて結晶面の頂点を計算
+            // ミラー指数の逆数が切片を表す
+            let intercepts = [
+                h !== 0 ? 1/Math.abs(h) : Infinity,
+                k !== 0 ? 1/Math.abs(k) : Infinity,
+                l !== 0 ? 1/Math.abs(l) : Infinity
+            ];
+            
+            // 符号を考慮
+            if (h < 0) intercepts[0] *= -1;
+            if (k < 0) intercepts[1] *= -1;
+            if (l < 0) intercepts[2] *= -1;
+            
+            // 立方体との交点を求める
+            // 各軸との交点
+            let axisIntercepts = [];
+            
+            // x軸との交点 (y=0, z=0)
+            if (h !== 0) axisIntercepts.push([intercepts[0], 0, 0]);
+            
+            // y軸との交点 (x=0, z=0)
+            if (k !== 0) axisIntercepts.push([0, intercepts[1], 0]);
+            
+            // z軸との交点 (x=0, y=0)
+            if (l !== 0) axisIntercepts.push([0, 0, intercepts[2]]);
+            
+            // 座標面との交点
+            // xy平面 (z=0)
+            if (h !== 0 && k !== 0) {
+                axisIntercepts.push([intercepts[0], 0, 0]);
+                axisIntercepts.push([0, intercepts[1], 0]);
+            }
+            
+            // xz平面 (y=0)
+            if (h !== 0 && l !== 0) {
+                axisIntercepts.push([intercepts[0], 0, 0]);
+                axisIntercepts.push([0, 0, intercepts[2]]);
+            }
+            
+            // yz平面 (x=0)
+            if (k !== 0 && l !== 0) {
+                axisIntercepts.push([0, intercepts[1], 0]);
+                axisIntercepts.push([0, 0, intercepts[2]]);
+            }
+            
+            // 平面の方程式: hx + ky + lz = 1 (正規化された形式)
+            // 立方体の各辺と平面の交点を見つける
+            const cubePoints = generateCubicPoints().map(p => transformToCenterOrigin(p));
+            
+            // 立方体の辺と平面の交点を計算
+            for (let edge of edges) {
+                const p1 = cubePoints[edge[0]];
+                const p2 = cubePoints[edge[1]];
+                
+                // 平面の方程式: h(x-1) + k(y-1) + l(z-1) = 0
+                // ここで(1,1,1)は原点に相当
+                const d1 = h * (p1[0]-1) + k * (p1[1]-1) + l * (p1[2]-1);
+                const d2 = h * (p2[0]-1) + k * (p2[1]-1) + l * (p2[2]-1);
+                
+                // 辺が平面と交差する場合
+                if (d1 * d2 <= 0 && d1 !== d2) {
+                    // 交点を計算
+                    const t = d1 / (d1 - d2);
+                    const intersection = [
+                        p1[0] + t * (p2[0] - p1[0]),
+                        p1[1] + t * (p2[1] - p1[1]),
+                        p1[2] + t * (p2[2] - p1[2])
+                    ];
+                    
+                    // 立方体の範囲内にある場合のみ追加
+                    if (intersection[0] >= 0 && intersection[0] <= 2 &&
+                        intersection[1] >= 0 && intersection[1] <= 2 &&
+                        intersection[2] >= 0 && intersection[2] <= 2) {
+                        planeVertices.push(intersection);
+                    }
+                }
+            }
+            
+            // 重複を除去
+            const uniqueVertices = [];
+            for (let i = 0; i < planeVertices.length; i++) {
+                let unique = true;
+                for (let j = 0; j < uniqueVertices.length; j++) {
+                    const dist = Math.sqrt(
+                        Math.pow(planeVertices[i][0] - uniqueVertices[j][0], 2) +
+                        Math.pow(planeVertices[i][1] - uniqueVertices[j][1], 2) +
+                        Math.pow(planeVertices[i][2] - uniqueVertices[j][2], 2)
+                    );
+                    if (dist < 0.001) {
+                        unique = false;
+                        break;
+                    }
+                }
+                if (unique) {
+                    uniqueVertices.push(planeVertices[i]);
+                }
+            }
+            
+            // 原点から見て頂点を順序付け
+            const center = uniqueVertices.reduce(
+                (acc, pt) => [acc[0] + pt[0]/uniqueVertices.length, acc[1] + pt[1]/uniqueVertices.length, acc[2] + pt[2]/uniqueVertices.length],
+                [0, 0, 0]
+            );
+            
+            return uniqueVertices;
+        }
+        
+        // 結晶方位を描画する関数
+        function drawCrystal() {
+            // キャンバスをクリア
+            context.clearRect(0, 0, canvasSize, canvasSize);
+            
+            // 立方晶の描画 (原点を中心にする)
+            const points = generateCubicPoints().map(p => transformToCenterOrigin(p));
+            const projectedPoints = points.map(project);
+            
+            // 立方晶のエッジを描画
+            context.strokeStyle = '#333';
+            context.lineWidth = 1;
+            
+            // x, y, z軸を描画
+                     const origin = project([1, 1, 1]); // 変換後の原点
+                     
+                     // 座標軸を描画
+                     context.beginPath();
+                     context.strokeStyle = '#FF0000'; // x軸は赤
+                     context.moveTo(origin[0], origin[1]);
+            // x, y, z軸を描画
+                     //const origin = project([1, 1, 1]); // 変換後の原点
+                     
+                     // 座標軸を描画
+                     context.beginPath();
+                     context.strokeStyle = '#FF0000'; // x軸は赤
+                     context.moveTo(origin[0], origin[1]);
+              let endX = project([2, 1, 1]);
+                     context.lineTo(endX[0], endX[1]);
+                     context.stroke();
+                     
+                     context.beginPath();
+                     context.strokeStyle = '#0000FF'; // z軸は青
+                     context.moveTo(origin[0], origin[1]);
+              let endZ = project([1, 2, 1]);
+                     context.lineTo(endZ[0], endZ[1]);
+                     context.stroke();
+                     
+                     context.beginPath();
+                     context.strokeStyle = '#00FF00'; // y軸は緑
+                     context.moveTo(origin[0], origin[1]);
+              let endY = project([1, 1, 0]);
+                     context.lineTo(endY[0], endY[1]);
+                     context.stroke();
+                     
+                     // 座標系のラベルを描画
+                     context.fillStyle = '#FF0000';
+                     context.font = '16px Arial';
+                     context.fillText('x', project([1.8, 1, 1])[0], project([1.8, 1, 1])[1]);
+                     
+                     context.fillStyle = '#00FF00';
+                     context.fillText('z', project([1, 1, 0.2])[0], project([1, 1, 0.2])[1]);
+                     
+                     context.fillStyle = '#0000FF';
+                     context.fillText('y', project([1, 2.1, 1])[0], project([1, 2.1, 1])[1]);
+            
+            // 立方晶のエッジを描画
+                       context.strokeStyle = '#333';
+                       edges.forEach(edge => {
+                           context.beginPath();
+                           context.moveTo(projectedPoints[edge[0]][0], projectedPoints[edge[0]][1]);
+                           context.lineTo(projectedPoints[edge[1]][0], projectedPoints[edge[1]][1]);
+                           context.stroke();
+                       });
+            
+            // 原点を描画
+            context.fillStyle = '#000';
+            context.beginPath();
+            context.arc(origin[0], origin[1], 3, 0, Math.PI * 2);
+            context.fill();
+            
+            // 結晶面を描画
+            if (orientationType === 'plane' || showRollingDirection) {
+                const { h, k, l } = planeIndices;
+                
+                if (!(h === 0 && k === 0 && l === 0)) {
+                    const planePoints = calculatePlanePoints(h, k, l);
+                    
+                    if (planePoints.length >= 3) {
+                        // 平面を描画
+                        const projectedPlanePoints = planePoints.map(project);
+                        
+                        // 中心点を計算
+                        const center = projectedPlanePoints.reduce(
+                            (acc, pt) => [acc[0] + pt[0]/projectedPlanePoints.length, acc[1] + pt[1]/projectedPlanePoints.length],
+                            [0, 0]
+                        );
+                        
+                        // 中心点からの角度でソート
+                        projectedPlanePoints.sort((a, b) => {
+                            const angleA = Math.atan2(a[1] - center[1], a[0] - center[0]);
+                            const angleB = Math.atan2(b[1] - center[1], b[0] - center[0]);
+                            return angleA - angleB;
+                        });
+                        
+                        // 平面のみを描画
+                        context.beginPath();
+                        context.moveTo(projectedPlanePoints[0][0], projectedPlanePoints[0][1]);
+                        for (let i = 1; i < projectedPlanePoints.length; i++) {
+                            context.lineTo(projectedPlanePoints[i][0], projectedPlanePoints[i][1]);
+                        }
+                        context.closePath();
+                        context.fillStyle = 'rgba(0, 128, 255, 0.3)';
+                        context.fill();
+                        context.strokeStyle = 'rgb(0, 100, 200)';
+                        context.lineWidth = 2;
+                        context.stroke();
+                        
+
+                    }
+                }
+            }
+            
+            // 結晶方向を描画
+            if (orientationType === 'direction' || showRollingDirection) {
+                const { u, v, w } = directionIndices;
+
+                // 等価な方向を生成
+                const equivalentDirections = [
+                    [u, v, w],
+                    [u, -v, -w],
+                    [-u, v, -w],
+                    [-u, -v, w],
+                    [v, u, w],
+                    [v, -u, -w],
+                    [-v, u, -w],
+                    [-v, -u, w],
+                    [w, v, u],
+                    [w, -v, -u],
+                    [-w, v, -u],
+                    [-w, -v, u]
+                ];
+
+                // 各方向ベクトルを描画
+                equivalentDirections.forEach(dir => {
+                    const normalizedDir = [
+                        dir[0] * 0.8,
+                        dir[1] * 0.8,
+                        dir[2] * 0.8
+                    ];
+
+                    // 原点から方向ベクトルを描画
+                    const start = project([1, 1, 1]); // 変換後の原点
+                    const end = project([
+                        1 + normalizedDir[0],
+                        1 + normalizedDir[1],
+                        1 + normalizedDir[2]
+                    ]);
+
+                    // 方向ベクトルを描画
+                    context.beginPath();
+                    context.moveTo(start[0], start[1]);
+                    context.lineTo(end[0], end[1]);
+                    context.strokeStyle = '#000'; // 黒色の矢印
+                    context.lineWidth = 2;
+                    context.stroke();
+
+                    // 矢印の先端
+                    context.fillStyle = '#000';
+                    context.beginPath();
+                    // 矢印の根本から先端までの長さを定義
+                    const arrowLength = 10;
+
+                    // 矢印の角度を計算
+                    const angle = Math.atan2(end[1] - start[1], end[0] - start[0]);
+
+                    // 矢印のパスを定義
+                    context.moveTo(end[0], end[1]);
+                    context.lineTo(end[0] - arrowLength * Math.cos(angle - Math.PI / 6), end[1] - arrowLength * Math.sin(angle - Math.PI / 6));
+                    context.lineTo(end[0] - arrowLength * Math.cos(angle + Math.PI / 6), end[1] - arrowLength * Math.sin(angle + Math.PI / 6));
+                    context.closePath();
+                    context.fill();
+                });
+            }
+
+            // 選択に基づいたタイトルを追加
+            context.fillStyle = '#000';
+            context.font = 'bold 16px Arial';
+            let title = '';
+            
+            if (showRollingDirection) {
+                title = `{${planeIndices.h}${planeIndices.k}${planeIndices.l}}<${directionIndices.u}${directionIndices.v}${directionIndices.w}>`;
+            } else if (orientationType === 'plane') {
+                title = `{${planeIndices.h}${planeIndices.k}${planeIndices.l}}`;
+            } else {
+                title = `<${directionIndices.u}${directionIndices.v}${directionIndices.w}>`;
+            }
+            
+            context.fillText(title, 10, 30);
+                   }
+                   
+                   // 初期状態のUIを設定
+        updateUIState();
+        
+        // 初期描画
+        drawCrystal();
+
+        // マウスホイールイベントリスナー
+        canvas.addEventListener('wheel', (event) => {
+            event.preventDefault(); // デフォルトのスクロール動作を防止
+
+            // ホイールの回転方向に応じてスケールを調整
+            const delta = Math.sign(event.deltaY);
+            scale += delta * 5; // ズーム速度を調整
+
+            // スケールの最小値と最大値を設定
+            scale = Math.max(10, Math.min(scale, 150));
+
+            // 再描画
+            drawCrystal();
+        });
+
+        let isRotating = false;
+        let previousMouseX = 0;
+        let previousMouseY = 0;
+
+        // マウスの右クリックイベントリスナー
+        canvas.addEventListener('mousedown', (event) => {
+            if (event.button === 2) { // 右クリック
+                isRotating = true;
+                previousMouseX = event.clientX;
+                previousMouseY = event.clientY;
+            }
+        });
+
+        canvas.addEventListener('mousemove', (event) => {
+            if (isRotating) {
+                const deltaX = event.clientX - previousMouseX;
+                const deltaY = event.clientY - previousMouseY;
+
+                // 回転角度を調整
+                rotationX += deltaY * 0.01;
+                rotationY += deltaX * 0.01;
+
+                // マウスの位置を更新
+                previousMouseX = event.clientX;
+                previousMouseY = event.clientY;
+
+                // 再描画
+                drawCrystal();
+            }
+        });
+
+        canvas.addEventListener('mouseup', (event) => {
+            if (event.button === 2) { // 右クリック
+                isRotating = false;
+            }
+        });
+
+        canvas.addEventListener('contextmenu', (event) => {
+            event.preventDefault(); // 右クリックメニューを表示しない
+        });
+
+        const btnReset = document.getElementById('btn-reset');
+
+        btnReset.addEventListener('click', () => {
+            rotationX = 0;
+            rotationY = 0;
+            drawCrystal();
+        });
+
+        // 3D点を2Dに投影する関数
+        function project(point) {
+            // 原点(0,0,0)を中心に配置するため、座標の範囲を[-1,1]から[0,2]に変換
+            const centeredPoint = [point[0] - 1, point[1] - 1, point[2] - 1];
+
+            // 回転を適用
+            const rotatedX = centeredPoint[0] * Math.cos(rotationY) - centeredPoint[2] * Math.sin(rotationY);
+            const rotatedZ = centeredPoint[0] * Math.sin(rotationY) + centeredPoint[2] * Math.cos(rotationY);
+
+            const rotatedY = rotatedX * Math.sin(rotationX) + centeredPoint[1] * Math.cos(rotationX);
+            const rotatedXX = rotatedX * Math.cos(rotationX) - centeredPoint[1] * Math.sin(rotationX);
+
+            // 斜めから俯瞰した視点
+            const originX = centerPoint;
+            const originY = centerPoint;
+            const x = originX + scale * (rotatedXX - rotatedY * 0.5);
+            const y = originY + scale * (rotatedZ + rotatedY * 0.3);
+
+            return [x, y];
+        }
+    </script>
+</body>
+</html>
